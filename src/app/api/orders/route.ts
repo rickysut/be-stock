@@ -5,8 +5,31 @@ import pool from "@/lib/pool";
 export async function GET() {
     const client = await pool.connect();
     try {
-        const result = await client.query('SELECT * FROM sales_order ORDER BY order_no');
-        return NextResponse.json({ data: result.rows }, { status: 200 });
+        const ordersRes = await client.query('SELECT * FROM sales_order ORDER BY order_no');
+
+        if (ordersRes.rowCount && ordersRes.rowCount > 0) {
+            const orderNos = ordersRes.rows.map((o: any) => o.order_no);
+            const detailsRes = await client.query(
+                'SELECT * FROM sales_order_details WHERE sales_order = ANY($1)',
+                [orderNos]
+            );
+
+            const detailsMap: Record<string, any[]> = {};
+            for (const d of detailsRes.rows) {
+                const key: string = d.sales_order;
+                if (!detailsMap[key]) detailsMap[key] = [];
+                detailsMap[key].push(d);
+            }
+
+            const data = ordersRes.rows.map((o: any) => ({
+                ...o,
+                details: detailsMap[o.order_no] ?? [],
+            }));
+
+            return NextResponse.json({ data }, { status: 200 });
+        }
+
+        return NextResponse.json({ data: [] }, { status: 200 });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return NextResponse.json({ error: 'Database error', details: message }, { status: 500 });
