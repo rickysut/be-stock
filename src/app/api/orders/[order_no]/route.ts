@@ -20,7 +20,19 @@ export async function GET(
     );
 
     if (result.rowCount && result.rowCount > 0) {
-      return NextResponse.json({ data: result.rows }, { status: 200 });
+      const detailsRes = await client.query(
+        "SELECT * FROM sales_order_details WHERE sales_order = $1",
+        [order_no]
+      );
+
+      const order = result.rows[0];
+      const details = detailsRes.rows ?? [];
+
+      // Preserve array shape in `data` while including details
+      return NextResponse.json(
+        { data: [{ ...order, details }] },
+        { status: 200 }
+      );
     }
 
     return NextResponse.json(
@@ -37,4 +49,3 @@ export async function GET(
     client.release();
   }
 }
-
